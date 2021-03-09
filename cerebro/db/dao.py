@@ -15,8 +15,23 @@
 import uuid
 from datetime import datetime
 from . import db
+from ..commons.constants import *
 
-################### Experiment ##################
+
+class Metric(db.Model):
+    name = db.Column(db.String(32), primary_key=True)
+    model_id = db.Column(db.String(32), db.ForeignKey('model.id'), primary_key=True)
+    values = db.Column(db.String(8192))
+    
+    def __init__(self, model_id, name, values):
+        self.model_id = model_id
+        self.name = name
+        self.values = ",".join(["{:.4f}".format(x) for x in values])
+
+    def __repr__(self):
+        return '<ParamVal %r, %r>' % self.name, self.model_id
+
+
 class Experiment(db.Model):
     id = db.Column(db.String(32), primary_key=True)
     name = db.Column(db.String(32))
@@ -24,27 +39,34 @@ class Experiment(db.Model):
     creation_time = db.Column(db.DateTime)
     last_update_time = db.Column(db.DateTime)
     status = db.Column(db.String(32))
+    model_selection_algorithm = db.Column(db.String(32))
+    max_num_models = db.Column(db.Integer())
     feature_columns = db.Column(db.String(512))
     label_columns = db.Column(db.String(512))
     max_train_epochs = db.Column(db.Integer())
-    training_data_prefix_path = db.Column(db.String(512))
+    data_store_prefix_path = db.Column(db.String(512))
     executable_entrypoint = db.Column(db.String(512))
+    exception_message = db.Column(db.String(4096))
 
     param_defs = db.relationship('ParamDef', backref='experiment', lazy='dynamic')
     models = db.relationship('Model', backref='model', lazy='dynamic')
 
 
-    def __init__(self, name, description, feature_columns, label_columns, max_train_epochs, training_data_prefix_path, executable_entrypoint):
+    def __init__(self, name, description, model_selection_algorithm, max_num_models, feature_columns, label_columns, max_train_epochs,
+        data_store_prefix_path, executable_entrypoint):
+        
         self.id = str(uuid.uuid4())
         self.name = name
         self.description = description
         self.creation_time = datetime.utcnow()
         self.last_update_time = self.creation_time
         self.status = 'created'
+        self.model_selection_algorithm = model_selection_algorithm
+        self.max_num_models = max_num_models
         self.feature_columns = feature_columns
         self.label_columns = label_columns
         self.max_train_epochs = max_train_epochs
-        self.training_data_prefix_path = training_data_prefix_path
+        self.data_store_prefix_path = data_store_prefix_path
         self.executable_entrypoint = executable_entrypoint
 
     def __repr__(self):
@@ -59,55 +81,62 @@ class Model(db.Model):
     status = db.Column(db.String(32))
     num_trained_epochs = db.Column(db.Integer())
     max_train_epochs = db.Column(db.Integer())
+    warm_start_model_id = db.Column(db.String(32))
+    exception_message = db.Column(db.String(4096))
 
     param_vals = db.relationship('ParamVal', backref='model', lazy='dynamic')
+    metrics = db.relationship('Metric', backref='model', lazy='dynamic')
 
-    def __init__(self, exp_id, num_trained_epochs, max_train_epochs):
-        self.id = str(uuid.uuid4())
+    def __init__(self, model_id, exp_id, num_trained_epochs, max_train_epochs, warm_start_model_id=None):
+        self.id = model_id
         self.exp_id = exp_id        
         self.creation_time = datetime.utcnow()
         self.last_update_time = self.creation_time
         self.status = 'created'
         self.num_trained_epochs = num_trained_epochs
         self.max_train_epochs = max_train_epochs
+        self.warm_start_model_id = warm_start_model_id
 
     def __repr__(self):
         return '<Model %r>' % self.id
 
 
 class ParamDef(db.Model):
+    exp_id = db.Column(db.String(32), db.ForeignKey('experiment.id'), primary_key=True)
     name = db.Column(db.String(32), primary_key=True)
-    exp_id = db.Column(db.String(32), db.ForeignKey('experiment.id'))
     param_type = db.Column(db.String(32))
-    values = db.Column(db.String(512))
-    min_val = db.Column(db.Float())
-    max_val = db.Column(db.Float())
-    count = db.Column(db.Integer())
-    base = db.Column(db.Integer())
+    choices = db.Column(db.String(512))
+    min = db.Column(db.Float())
+    max = db.Column(db.Float())
+    q = db.Column(db.Integer())
+    dtype = db.Column(db.String(32))
 
-    def __init__(self, exp_id, name, param_type, values=None, min_val=0, max_val=0, count=0, base=0):
+    def __init__(self, exp_id, name, param_type, choices=None, min=0, max=0, q=0, dtype=DTYPE_STR):
         self.exp_id = exp_id
         self.name = name
         self.param_type = param_type
-        self.values = values
-        self.min_val = min_val
-        self.max_val = max_val
-        self.count = count
-        self.base = base
+        self.choices = choices
+        self.min = min
+        self.max = max
+        self.q = q
+        self.dtype = dtype
+
 
     def __repr__(self):
-        return '<ParamDef %r>' % self.id
+        return '<ParamDef %r, %r>' % self.exp_id, self.name
 
 
 class ParamVal(db.Model):
     name = db.Column(db.String(32), db.ForeignKey('param_def.name'), primary_key=True)
-    model_id = db.Column(db.String(32), db.ForeignKey('model.id'))
+    model_id = db.Column(db.String(32), db.ForeignKey('model.id'), primary_key=True)
     value = db.Column(db.String(32))
+    dtype = db.Column(db.String(32))
     
-    def __init__(self, model_id, name, value):
+    def __init__(self, model_id, name, value, dtype):
         self.model_id = model_id
         self.name = name
-        self.value = value
+        self.value = str(value)
+        self.dtype = dtype
 
     def __repr__(self):
-        return '<ParamVal %r>' % self.id
+        return '<ParamVal %r, %r>' % self.name, self.model_id
