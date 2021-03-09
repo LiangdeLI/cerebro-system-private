@@ -66,7 +66,7 @@ def initialize_app(flask_app, args):
 def main():
     parser = argparse.ArgumentParser(description='Argument parser for Cerebro API server.')
 
-    parser.add_argument('--server-url', help='API server URL.', default='localhost:8888')
+    parser.add_argument('--server-url', help='API server URL.', default='localhost:8889')
     parser.add_argument('--spark-master-url', help='Spark master URL.', default='spark://localhost:7077')
     parser.add_argument('--database-uri', help='Database URI.', default='sqlite://')
     parser.add_argument('--temp-data-dir', help='Temp data directory.', default='/tmp')
