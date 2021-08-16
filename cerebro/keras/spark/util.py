@@ -58,7 +58,7 @@ class TFKerasUtil(object):
         has_sparse_col = any(metadata[col]['is_sparse_vector_only'] for col in label_columns + feature_columns)
 
         reshape = TFKerasUtil._reshape_fn(feature_columns, label_columns, metadata)
-        prep_data_tf_keras = _prep_data_fn(has_sparse_col, input_names, label_columns, input_shapes, output_shapes, output_names)
+        prep_data_tf_keras = _prep_data_fn(has_sparse_col, input_names, feature_columns, label_columns, input_shapes, output_shapes, output_names)
 
         def fn(reader, transformation_fn):
             from petastorm.tf_utils import make_petastorm_dataset
@@ -138,7 +138,7 @@ class TFKerasUtil(object):
         return reshape
 
 
-def _prep_data_fn(has_sparse_col, input_names, label_columns,
+def _prep_data_fn(has_sparse_col, input_names, feature_columns, label_columns,
                   input_shapes, output_shapes, output_names):
 
     def get_col_from_row_fn(row, col):
@@ -147,13 +147,13 @@ def _prep_data_fn(has_sparse_col, input_names, label_columns,
         else:
             return getattr(row, col)
 
-    num_inputs = len(input_names)
+    num_inputs = len(feature_columns)
     num_labels = len(label_columns)
 
     def prep(row):
         return (
             tuple(
-                tf.reshape(get_col_from_row_fn(row, input_names[i]), input_shapes[i])
+                tf.reshape(get_col_from_row_fn(row, feature_columns[i]), input_shapes[i])
                 for i
                 in range(num_inputs)),
             # No reshaping for the outputs.
